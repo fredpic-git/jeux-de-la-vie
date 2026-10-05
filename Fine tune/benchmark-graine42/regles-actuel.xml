@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Rules xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <FoodPerDay>10</FoodPerDay>
+  <DayLength>600</DayLength>
+  <StartingEnergy>800</StartingEnergy>
+  <FoodDecrease>0</FoodDecrease>
+  <DecreaseInterval>2</DecreaseInterval>
+  <MinimumFood>10</MinimumFood>
+  <SurvivalFood>1</SurvivalFood>
+  <ReproductionFood>2</ReproductionFood>
+  <MatingDistance>8</MatingDistance>
+  <FemaleRatio>0.5</FemaleRatio>
+  <ReturnMargin>2</ReturnMargin>
+  <Predation>true</Predation>
+  <PredatorRatio>1.2</PredatorRatio>
+  <MovementCost>1</MovementCost>
+  <SizePower>3</SizePower>
+  <SpeedPower>2</SpeedPower>
+  <SenseCost>1</SenseCost>
+  <SenseRadius>25</SenseRadius>
+  <MutateSpeed>true</MutateSpeed>
+  <MutateSize>true</MutateSize>
+  <MutateSense>true</MutateSense>
+  <MutationChance>0.0025</MutationChance>
+  <MutationAmount>0.2</MutationAmount>
+  <RecombinationChance>0.12</RecombinationChance>
+  <DominanceStrength>0.35</DominanceStrength>
+  <InitialDiversity>0.4</InitialDiversity>
+  <InitialPopulation>25</InitialPopulation>
+  <InitialSpeed>1</InitialSpeed>
+  <InitialSize>1</InitialSize>
+  <InitialSense>1</InitialSense>
+  <Seed>42</Seed>
+  <EcosystemEnabled>true</EcosystemEnabled>
+  <WaterForLife>1</WaterForLife>
+  <MountainDifficulty>1.7</MountainDifficulty>
+  <LeaderEnabled>true</LeaderEnabled>
+  <RaidChance>0.2</RaidChance>
+  <WeaponBonus>0.6</WeaponBonus>
+  <AlliancesEnabled>true</AlliancesEnabled>
+  <AllianceTrust>20</AllianceTrust>
+  <AllianceBreak>5</AllianceBreak>
+  <RaidHostility>-20</RaidHostility>
+  <RaidSquadSize>2</RaidSquadSize>
+</Rules>

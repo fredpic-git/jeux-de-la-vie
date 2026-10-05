@@ -1,0 +1,17 @@
+# Exécutables et configurations générés par les simulations
+*.exe
+*.exe.config
+*.dll
+*.pdb
+
+# Paquets de distribution et fichiers temporaires
+*.zip
+*.tmp
+*.log
+
+# Configuration locale des outils
+.vs/
+.vscode/
+.codex/
+.agents/
+.aws/

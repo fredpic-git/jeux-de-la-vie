@@ -1,0 +1,84 @@
+using System;
+using System.IO;
+using System.Text;
+using System.Linq;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Web.Script.Serialization;
+namespace AnalyseEquilibrage {
+ public class Result {
+  public string Scenario,Lot; public int Runs,Extinctions,Coexistences,RunsRaids,RunsCoalitions,RunsDamage,RunsZero,RunsArmed;
+  public int[] Winners=new int[4]; public double Population,PopulationMedian,PopulationP10,PopulationP90,Raids,Coalitions,WeaponsMade,IronMade,EnergyMade,FoodMade,PeakArmed,Births,Deaths,Predations,FinalReserves;
+  public List<Dictionary<string,double>> Evolution=new List<Dictionary<string,double>>();
+ }
+ class Day { public Dictionary<string,double> Totals=new Dictionary<string,double>(); public Dictionary<int,double> Minimums=new Dictionary<int,double>(); public int N; public double Alive; }
+ public static class Report {
+  static string[] names={"sans-mutations","vitesse","trois-traits","rarefaction","penurie","conflit-maga","grand-monde"};
+  static string[] french={"Sans mutations","Mutation vitesse","Trois traits","Raréfaction","Pénurie","Conflit MAGA","Grand monde"};
+  static double Num(string s) { return double.Parse(s,CultureInfo.InvariantCulture); }
+  static Dictionary<string,int> Columns(string header) { string[] cols=header.Split(','); Dictionary<string,int> d=new Dictionary<string,int>(); for(int i=0;i<cols.Length;i++) d[cols[i]]=i; return d; }
+  static double Get(string[] row,Dictionary<string,int> cols,string field) { return Num(row[cols[field]]); }
+  static void Add(Day d,string key,double value) { double old; d.Totals.TryGetValue(key,out old); d.Totals[key]=old+value; }
+  static double Quantile(List<double> values,double q) { double position=(values.Count-1)*q; int i=(int)position; return values[i]+(values[Math.Min(values.Count-1,i+1)]-values[i])*(position-i); }
+  public static Result Read(string directory,int scenario,string lot,int expected,int days) {
+   string summary=Path.Combine(directory,"runs-"+names[scenario]+".csv"); if(!File.Exists(summary)) throw new Exception("Lot incomplet : "+summary);
+   Result r=new Result { Scenario=names[scenario],Lot=lot }; List<double> populations=new List<double>(); HashSet<int> seeds=new HashSet<int>(); HashSet<long> dailyKeys=new HashSet<long>();
+   using(StreamReader reader=new StreamReader(summary)) { var cols=Columns(reader.ReadLine()); string line;
+    while((line=reader.ReadLine())!=null) { if(line.Length==0) continue; string[] row=line.Split(','); if(row.Length!=cols.Count) throw new Exception("Résumé tronqué : "+summary); if(!seeds.Add((int)Get(row,cols,"graine"))) throw new Exception("Graine dupliquée : "+summary); r.Runs++;
+     if(row[cols["resultat"]]=="extinction") r.Extinctions++; else if(row[cols["resultat"]]=="coexistence_limite") r.Coexistences++; else r.Winners[(int)Get(row,cols,"gagnant")]++;
+     double pop=Get(row,cols,"population_finale"); populations.Add(pop); r.Population+=pop;
+     double raids=Get(row,cols,"raids"),coal=Get(row,cols,"coalitions"),arms=Get(row,cols,"armes_equipees_max"); if(raids>0) r.RunsRaids++; if(coal>0) r.RunsCoalitions++; if(arms>0) r.RunsArmed++;
+     if(Get(row,cols,"defenses_min")<99.999) r.RunsDamage++; if(Get(row,cols,"defenses_min")<.001) r.RunsZero++;
+     r.Raids+=raids; r.Coalitions+=coal; r.PeakArmed+=arms; r.WeaponsMade+=Get(row,cols,"armes_produites"); r.IronMade+=Get(row,cols,"fer_produit"); r.EnergyMade+=Get(row,cols,"energie_produite"); r.FoodMade+=Get(row,cols,"nourriture_produite"); r.Births+=Get(row,cols,"naissances"); r.Deaths+=Get(row,cols,"morts"); r.Predations+=Get(row,cols,"predations");
+    }
+   }
+   if(r.Runs!=expected) throw new Exception("Nombre de runs incorrect : "+r.Scenario+" = "+r.Runs+", attendu "+expected);
+   populations.Sort(); r.PopulationMedian=Quantile(populations,.5); r.PopulationP10=Quantile(populations,.1); r.PopulationP90=Quantile(populations,.9);
+   r.Population/=r.Runs; r.Raids/=r.Runs; r.Coalitions/=r.Runs; r.PeakArmed/=r.Runs; r.WeaponsMade/=r.Runs; r.IronMade/=r.Runs; r.EnergyMade/=r.Runs; r.FoodMade/=r.Runs; r.Births/=r.Runs; r.Deaths/=r.Runs; r.Predations/=r.Runs;
+   Day[] timeline=new Day[days]; for(int i=0;i<days;i++) timeline[i]=new Day();
+   using(StreamReader reader=new StreamReader(Path.Combine(directory,"jours-"+names[scenario]+".csv"))) {
+    string header=reader.ReadLine(); var cols=Columns(header); string[] fields=header.Split(','); string line;
+    while((line=reader.ReadLine())!=null) { if(line.Length==0) continue; string[] row=line.Split(','); if(row.Length!=fields.Length) throw new Exception("Ligne quotidienne tronquée"); int day=(int)Get(row,cols,"jour")-1,seed=(int)Get(row,cols,"graine"),f=(int)Get(row,cols,"faction"); Day d=timeline[day]; double pop=Get(row,cols,"population");
+     if(day<0 || day>=days || f<0 || f>=4 || !seeds.Contains(seed)) throw new Exception("Identité de bilan invalide"); if(!dailyKeys.Add(((long)seed*days+day)*4+f)) throw new Exception("Bilan quotidien dupliqué");
+     Add(d,"population",pop); Add(d,"population_"+f,pop); Add(d,"armes_equipees",Get(row,cols,"armes_equipees")); Add(d,"reserves",Get(row,cols,"reserves")); Add(d,"capacite",Get(row,cols,"capacite")); Add(d,"defenses",Get(row,cols,"defenses_fin")/4);
+     double minimum=Get(row,cols,"defenses_min_jour"),prior; if(!d.Minimums.TryGetValue(seed,out prior) || minimum<prior) d.Minimums[seed]=minimum;
+     foreach(string trait in new string[] {"vitesse","taille","perception"}) Add(d,trait,Get(row,cols,trait)*pop); d.Alive+=pop;
+     if(f!=1) Add(d,"confiance_corail",Get(row,cols,"confiance_1")/3); else Add(d,"allies_corail",Get(row,cols,"allies"));
+     if(f==0) { d.N++; Add(d,"raids",Get(row,cols,"raids_cumul")); Add(d,"coalitions",Get(row,cols,"coalitions_cumul")); Add(d,"plans",Get(row,cols,"plans")); Add(d,"nourriture_aube",Get(row,cols,"nourriture_aube")); }
+     for(int k=0;k<fields.Length;k++) if(fields[k].StartsWith("stock_") || fields[k].StartsWith("production_") || fields[k].StartsWith("consommation_") || fields[k].StartsWith("sac_") || f==0 && fields[k].StartsWith("carte_")) Add(d,fields[k],Num(row[k]));
+    }
+   }
+   if(dailyKeys.Count!=expected*days*4) throw new Exception("Bilans de factions manquants : "+r.Scenario);
+   for(int i=0;i<days;i++) {
+    Day d=timeline[i]; if(d.N!=expected) throw new Exception("Jour incomplet : "+r.Scenario+", J"+(i+1)+", "+d.N+" runs");
+    foreach(string trait in new string[] {"vitesse","taille","perception"}) d.Totals[trait]=d.Alive==0?0:d.Totals[trait]/d.Alive*d.N;
+    Add(d,"defenses_min",d.Minimums.Values.Sum()); var evolution=new Dictionary<string,double>(); evolution["jour"]=i+1;
+    foreach(var entry in d.Totals) evolution[entry.Key]=entry.Value/d.N; r.Evolution.Add(evolution);
+   }
+   r.FinalReserves=r.Evolution[days-1]["reserves"]; return r;
+  }
+  static string F(double n) { return n.ToString("0.0",CultureInfo.InvariantCulture); }
+  static string Rate(int n,int total) { return F(100.0*n/total)+" %"; }
+  public static void Create(string before,string after,string output,int expected,int days,string template) {
+   Directory.CreateDirectory(output); List<Result> all=new List<Result>();
+   for(int i=0;i<7;i++) { all.Add(Read(before,i,"avant",expected,days)); all.Add(Read(after,i,"apres",expected,days)); }
+   JavaScriptSerializer serializer=new JavaScriptSerializer(); serializer.MaxJsonLength=16000000;
+   File.WriteAllText(Path.Combine(output,"resultats.json"),serializer.Serialize(all),new UTF8Encoding(false));
+   string html=File.ReadAllText(template,Encoding.UTF8).Replace("__DATA__",serializer.Serialize(all)).Replace("__SCRIPT__",File.ReadAllText(Path.Combine(Path.GetDirectoryName(template),"Rapport-Equilibrage.js"),Encoding.UTF8)).Replace("__RUNS__",expected.ToString()).Replace("__DAYS__",days.ToString());
+   File.WriteAllText(Path.Combine(output,"Rapport-Equilibrage.html"),html,new UTF8Encoding(false));
+   StringBuilder csv=new StringBuilder("scenario,lot,runs,population_finale_moyenne,mediane,p10,p90,runs_raids,runs_coalitions,runs_chateaux_endommages,runs_chateaux_zero,raids_moyens,coalitions_moyennes,armes_produites_moyennes,pic_equipes_moyen,reserves_finales_moyennes,extinctions,coexistences,victoires_bleus,victoires_corail,victoires_verts,victoires_violets\r\n");
+   foreach(Result r in all) {
+    csv.AppendLine(r.Scenario+","+r.Lot+","+r.Runs+","+F(r.Population)+","+F(r.PopulationMedian)+","+F(r.PopulationP10)+","+F(r.PopulationP90)+","+r.RunsRaids+","+r.RunsCoalitions+","+r.RunsDamage+","+r.RunsZero+","+F(r.Raids)+","+F(r.Coalitions)+","+F(r.WeaponsMade)+","+F(r.PeakArmed)+","+F(r.FinalReserves)+","+r.Extinctions+","+r.Coexistences+","+string.Join(",",Array.ConvertAll(r.Winners,delegate(int n) { return n.ToString(); })));
+    StringBuilder evolution=new StringBuilder(); var columns=r.Evolution[0].Keys.ToArray(); evolution.AppendLine(string.Join(",",columns)); foreach(var day in r.Evolution) evolution.AppendLine(string.Join(",",Array.ConvertAll(columns,delegate(string key) { return day[key].ToString("0.######",CultureInfo.InvariantCulture); }))); File.WriteAllText(Path.Combine(output,"evolution-"+r.Lot+"-"+r.Scenario+".csv"),evolution.ToString(),new UTF8Encoding(true));
+   }
+   File.WriteAllText(Path.Combine(output,"comparaison.csv"),csv.ToString(),new UTF8Encoding(true));
+   StringBuilder md=new StringBuilder("# Équilibrage des sept scénarios\n\n"+expected+" graines par scénario et par lot, "+days+" jours simulés maximum. Aucun rendu graphique pendant les runs. Les réglages et les sources exactes sont archivés avec chaque lot.\n\n| Scénario | Population finale avant → après | Runs avec raids avant → après | Avec coalitions avant → après | Châteaux endommagés avant → après | Armes produites après (moyenne) |\n|---|---:|---:|---:|---:|---:|\n");
+   for(int i=0;i<7;i++) { Result a=all[i*2],b=all[i*2+1]; md.AppendLine("| "+french[i]+" | "+F(a.Population)+" → "+F(b.Population)+" | "+Rate(a.RunsRaids,expected)+" → "+Rate(b.RunsRaids,expected)+" | "+Rate(a.RunsCoalitions,expected)+" → "+Rate(b.RunsCoalitions,expected)+" | "+Rate(a.RunsDamage,expected)+" → "+Rate(b.RunsDamage,expected)+" | "+F(b.WeaponsMade)+" |"); }
+   md.Append("\n## Lecture des résultats\n\nDans le scénario sans mutations, le moteur initial produisait déjà "+F(all[0].WeaponsMade)+" armes par run et atteignait un pic moyen de "+F(all[0].PeakArmed)+" habitants équipés. Un stock d'armes faible dans le tableau n'indiquait donc pas une absence de fabrication : les armes sont distribuées à l'aube. Le panneau affiche maintenant séparément les habitants armés.\n\nLa population finale moyenne de ce scénario passe de "+F(all[0].Population)+" à "+F(all[1].Population)+" pour 200 fondateurs. La démographie est davantage contenue, sans garantie de stabilité pour toutes les graines. Les tableaux et courbes permettent de distinguer pénurie locale, ressources non collectées, stocks et capacité de production.\n\nEn pénurie, "+Rate(all[9].RunsRaids,expected)+" des validations présentent des raids, dont "+Rate(all[9].RunsCoalitions,expected)+" avec des attaques de coalition. Dans Conflit MAGA, ces proportions sont "+Rate(all[11].RunsRaids,expected)+" et "+Rate(all[11].RunsCoalitions,expected)+". La confiance moyenne envers MAGA au dernier jour vaut "+F(all[11].Evolution[days-1]["confiance_corail"])+", avec "+F(all[11].Evolution[days-1]["allies_corail"])+" alliés en moyenne. Ces indicateurs incluent les factions disparues : consulter les courbes et les données par graine pour interpréter leur évolution.\n\nLa référence Conflit MAGA présentait déjà des attaques dans "+Rate(all[10].RunsRaids,expected)+" des runs sur cet horizon, avec "+F(all[10].Raids)+" assauts en moyenne et une confiance finale moyenne de "+F(all[10].Evolution[days-1]["confiance_corail"])+". Les données ne confirment donc pas une absence générale de raids ou une amitié durable envers MAGA dans la version initiale ; la pénurie sans MAGA constituait le blocage principal observé.\n\nUn raid organisé ne garantit pas un assaut exécuté : il faut atteindre le château avant le retour obligatoire, et une coalition doit réunir plusieurs factions sur place. Des parties peuvent donc rester pacifiques. Un château peut être endommagé puis réparé ; le minimum mesuré à chaque pas conserve la trace de l'assaut.\n");
+   md.Append("\n## Gagnants du lot de validation\n\nUne victoire désigne une seule faction encore vivante au terme du run. Une coexistence à la limite des jours ne constitue pas une victoire de la faction la plus nombreuse.\n\n| Scénario | Bleus | Corail / MAGA | Verts | Violets | Extinction totale | Coexistence à la limite |\n|---|---:|---:|---:|---:|---:|---:|\n");
+   for(int i=0;i<7;i++) { Result b=all[i*2+1]; md.AppendLine("| "+french[i]+" | "+string.Join(" | ",Array.ConvertAll(b.Winners,delegate(int n) { return n.ToString(); }))+" | "+b.Extinctions+" | "+b.Coexistences+" |"); }
+   md.Append("\n## Choix retenus et limites\n\n- Nourriture de survie : 1 ; eau personnelle : 1 ; reproduction : 3 nourritures par parent, au lieu de 2.\n- Sacs : 3 unités pour les métiers ordinaires, 8 pour les transporteurs ; bonus MAGA de 2 unités. Priorité au transport d'eau si le château manque de réserve.\n- Agriculture : 2 terres, 1 eau et 1 énergie donnent 3 nourritures.\n- Énergie naturelle : 1 gisement de 2 unités de base par quart de carte, au lieu de 3 gisements de 3 ; quantités adaptées à la population. Le charbon retrouve un rôle dans la production.\n- Réparation : 3 points de défense par nuit, avec 1 fer et 2 énergies disponibles ; maximum de 4 agrandissements de stockage.\n- Diplomatie : la pénurie et les écarts de richesse dégradent les relations avec les camps qui concentrent les ressources ; les moins riches se rapprochent. Deux raids injustifiés rapprochés donnent une réputation d'agression qui bloque les alliances, puis celle-ci décroît de 1 point par nuit. Les contre-attaques contre un agresseur connu ne portent pas la même pénalité.\n- Raids hostiles accessibles à toutes les factions, même sans coalition ; choix des cibles de coalition mélangé pour éviter un avantage systématique de couleur. Aucun raid contre une faction disparue.\n- Grand monde conserve ses deux blocs permanents ; ces liens priment sur la diplomatie économique.\n- Génétique conservée : 0,0025 par copie de gène, amplitude 0,2, brassage 0,12 et dominance 0,35. Les courbes montrent les traits moyens, pas uniquement les mutations : sélection et brassage changent aussi la population.\n\nCes choix répondent à des objectifs de jeu (démographie plus contenue, chaînes de production utiles, diplomatie réactive et conflits effectivement visibles). Ils ne prouvent ni un optimum global ni une représentation scientifique de sociétés humaines. Les pilotes utilisaient les graines 0 à 7 ; le lot final utilise 1000 à 1249, distinctes des graines exploratoires.\n\nLes indicateurs de combat sont cumulés et les dégâts mesurés à chaque pas, avant réparation. Les quantités sur la carte et celles dans les châteaux sont séparées ; les stocks des châteaux dépeuplés restent comptés car ils existent encore. Les colonnes consommation_ mesurent uniquement les transformations, constructions et réparations ; les rations, échanges, pillages et pertes ne sont pas inclus dans ces compteurs. La production compte les ressources fabriquées, y compris les excédents perdus si les réserves sont pleines. Chaque journée est moyennée sur tous les runs, y compris les extinctions : aucune suppression des runs défavorables. Après extinction totale, la population et la production restent à zéro et les dernières quantités de stocks et de gisements sont conservées pour les bilans restants ; le moteur ne poursuit pas les renouvellements sans habitants. Les traits sont pondérés par les habitants vivants ; la série à zéro population ne donne pas de trait moyen.\n\nAvec 250 runs, la précision d'une proportion proche de 50 % est d'environ ±6 points à 95 %. Ne pas interpréter un écart de quelques points entre couleurs comme une preuve de biais. Les gisements sont renouvelés à chaque aube ; la raréfaction programmée concerne la nourriture naturelle. Les stocks alimentaires servent aux rations de survie, tandis que les parents doivent atteindre le seuil de nourriture sur le terrain pour former un couple ; un stock élevé ne suffit donc pas à garantir des naissances. La durée de "+days+" jours limite l'observation des mutations rares et ne permet pas d'affirmer qui gagnerait toutes les coexistences prolongées.\n\nOuvrir [le rapport graphique](Rapport-Equilibrage.html) pour consulter les courbes et [comparaison.csv](comparaison.csv) pour les chiffres synthétiques. Les CSV quotidiens des lots donnent tous les stocks, consommations, productions et quantités par graine et faction.\n");
+   File.WriteAllText(Path.Combine(output,"COMPTE-RENDU.md"),md.ToString(),new UTF8Encoding(true));
+  }
+ }
+}

@@ -1,0 +1,9 @@
+﻿graine,resultat,gagnant,premiere_faction_seule,jour_faction_seule,population_finale,bleus,corail,verts,violets,population_max,naissances,morts,predations,raids,coalitions,jours_raids,jours_coalitions,jours_plans,jours_chateaux_endommages,jours_chateaux_zero,defenses_min,armes_equipees_max,armes_produites,fer_produit,energie_produite,nourriture_produite
+0,coexistence_limite,-1,-1,0,84,21,26,19,18,204,138,254,6,0,0,0,0,0,0,0,100,156,296,865,3400,4611
+1,coexistence_limite,-1,-1,0,79,21,15,21,22,200,138,259,4,0,0,0,0,0,0,0,100,153,292,951,3504,4359
+2,coexistence_limite,-1,-1,0,94,29,22,18,25,201,131,237,5,0,0,0,0,0,0,0,100,160,283,1323,4768,3390
+3,coexistence_limite,-1,-1,0,66,5,29,14,18,199,113,247,0,0,0,0,0,0,0,0,100,171,283,1162,4332,4788
+4,coexistence_limite,-1,-1,0,71,20,18,19,14,180,99,228,2,0,0,0,0,0,0,0,100,108,231,953,3208,3273
+5,coexistence_limite,-1,-1,0,119,32,22,29,36,206,135,216,4,0,0,0,0,0,0,0,100,156,286,1420,4760,3846
+6,coexistence_limite,-1,-1,0,75,14,32,6,23,193,124,249,5,0,0,0,0,0,0,0,100,141,270,955,4084,3099
+7,coexistence_limite,-1,-1,0,152,31,41,29,51,199,132,180,2,0,0,0,0,0,0,0,100,176,294,1597,6528,5055
